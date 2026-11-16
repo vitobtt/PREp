@@ -8,9 +8,9 @@ const eur = (n) =>
 const MAX_MENSAJE = 1500
 
 const EJEMPLOS = [
-  'Necesito una web para un restaurante. Quiero mostrar la carta, tener un formulario para solicitar reservas y ofrecer el contenido en dos idiomas.',
-  'Quiero algo sencillo para mi negocio, que se vea bien.',
-  'Necesito una tienda online con pasarela de pago para vender ropa.'
+  { etiqueta: 'Restaurante con reservas', texto: 'Necesito una web para un restaurante. Quiero mostrar la carta, tener un formulario para solicitar reservas y ofrecer el contenido en dos idiomas.' },
+  { etiqueta: 'Algo sencillo', texto: 'Quiero algo sencillo para mi negocio, que se vea bien.' },
+  { etiqueta: 'Tienda online', texto: 'Necesito una tienda online con pasarela de pago para vender ropa.' }
 ]
 
 const BIENVENIDA = {
@@ -46,6 +46,7 @@ export default function App() {
 
   const listaRef = useRef(null)
   const dialogoRef = useRef(null)
+  const textareaRef = useRef(null)
 
   useEffect(() => {
     fetch('/api/catalogo').then((r) => r.json()).then(setCatalogo).catch(() => {})
@@ -55,6 +56,14 @@ export default function App() {
     const el = listaRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [mensajes, cargando, errorIA])
+
+  // la caja de texto crece con el contenido (hasta un máximo)
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+  }, [borrador])
 
   const porId = useMemo(() => new Map(catalogo.map((s) => [s.id, s])), [catalogo])
 
@@ -217,43 +226,60 @@ export default function App() {
   }
 
   const visibles = [BIENVENIDA, ...mensajes]
+  const paso = cotizacion && !obsoleto ? 3 : hayPropuesta ? 2 : 1
+  const precioTexto = (def) => (def.regla === 'Precio fijo' ? eur(def.precio) : def.regla)
+
+  function ajustarCantidad(id, def, delta) {
+    const s = seleccion.find((x) => x.id === id)
+    const actual = Number.isInteger(s?.cantidad) ? s.cantidad : def.cantidad.min - (delta > 0 ? 1 : 0)
+    cambiarServicio(id, { cantidad: Math.min(def.cantidad.max, Math.max(def.cantidad.min, actual + delta)) })
+  }
 
   return (
     <>
       <a className="salto" href="#asistente">Saltar al asistente</a>
 
       <nav className="nav" aria-label="Principal">
-        <a className="logo" href="#inicio">presupuesto<b>.web</b></a>
+        <a className="logo" href="#inicio">
+          <img src={mascotaCara} alt="" width="30" height="30" />
+          <span>presupuesto<b>.web</b></span>
+        </a>
         <ul>
-          <li><a href="#asistente">Asistente</a></li>
           <li><a href="#como">Cómo funciona</a></li>
+          <li><a className="nav-cta" href="#asistente">Pedir presupuesto</a></li>
         </ul>
       </nav>
 
       <header className="hero" id="inicio">
-        <div className="orbe orbe-a" aria-hidden="true" />
-        <div className="orbe orbe-b" aria-hidden="true" />
         <div className="hero-grid">
-        <div className="hero-texto">
-        <h1>Cuéntanos tu web<br />y te preparamos el presupuesto</h1>
-        <p className="lead">
-          Describe tu proyecto con tus palabras. Nuestro asistente te propone los servicios, tú los revisas y descargas el presupuesto en PDF.
-        </p>
-        <form className="hero-form" onSubmit={empezarDesdeHero}>
-          <label className="sr" htmlFor="hero-texto">Describe tu proyecto</label>
-          <input
-            id="hero-texto"
-            placeholder="Ej.: web para mi restaurante con carta y reservas"
-            value={heroTexto}
-            onChange={(e) => setHeroTexto(e.target.value)}
-          />
-          <button type="submit" className="btn-verde">Empezar</button>
-        </form>
-        </div>
-        <figure className="hero-mascota" aria-hidden="true">
-          <span className="bocadillo">¿Hablamos de tu web?</span>
-          <img src={mascota} alt="" width="520" height="847" />
-        </figure>
+          <div className="hero-texto">
+            <span className="eyebrow"><IconoChispa /> Presupuestos web con IA</span>
+            <h1>Cuéntanos tu web y te preparamos el <span className="degradado">presupuesto</span></h1>
+            <p className="lead">
+              Descríbela con tus palabras. El asistente te propone los servicios, tú decides qué se queda y descargas el presupuesto en PDF.
+            </p>
+            <form className="hero-form" onSubmit={empezarDesdeHero}>
+              <label className="sr" htmlFor="hero-texto">Describe tu proyecto</label>
+              <input
+                id="hero-texto"
+                placeholder="Ej.: web para mi restaurante con carta y reservas"
+                value={heroTexto}
+                onChange={(e) => setHeroTexto(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primario">
+                Empezar <IconoFlecha />
+              </button>
+            </form>
+            <ul className="ventajas">
+              <li><IconoCheck /> Tarifas reales, sin sorpresas</li>
+              <li><IconoCheck /> Tú revisas cada servicio</li>
+              <li><IconoCheck /> PDF al momento</li>
+            </ul>
+          </div>
+          <figure className="hero-mascota" aria-hidden="true">
+            <span className="bocadillo">¿Hablamos de tu web?</span>
+            <img src={mascota} alt="" width="520" height="847" />
+          </figure>
         </div>
       </header>
 
@@ -261,24 +287,23 @@ export default function App() {
         <section className="seccion" id="asistente" aria-labelledby="t-asis">
           <div className="cab-seccion">
             <div>
-              <h2 id="t-asis">Asistente de presupuestos</h2>
-              <p className="sub">La IA propone los servicios; los precios los calcula nuestro servidor con las tarifas vigentes.</p>
+              <h2 id="t-asis">Tu presupuesto en tres pasos</h2>
+              <p className="sub">La IA propone los servicios; los importes los calcula nuestro servidor con las tarifas vigentes.</p>
             </div>
             {(mensajes.length > 0 || hayPropuesta) && (
-              <button type="button" className="btn-link" onClick={nuevoProyecto}>Nuevo proyecto</button>
+              <button type="button" className="btn btn-fantasma" onClick={nuevoProyecto}>
+                <IconoReiniciar /> Nuevo proyecto
+              </button>
             )}
           </div>
 
-          <div className="campo-cliente">
-            <label htmlFor="cliente">Nombre del cliente o empresa</label>
-            <input
-              id="cliente"
-              value={cliente}
-              maxLength={120}
-              placeholder="Ej.: Restaurante La Prueba S.L. (datos ficticios)"
-              onChange={(e) => setCliente(e.target.value)}
-            />
-          </div>
+          <ol className="progreso" aria-label="Progreso">
+            {['Describe tu proyecto', 'Revisa la propuesta', 'Descarga el PDF'].map((t, i) => (
+              <li key={t} className={paso > i + 1 ? 'hecho' : paso === i + 1 ? 'actual' : ''} aria-current={paso === i + 1 ? 'step' : undefined}>
+                <span>{paso > i + 1 ? <IconoCheck /> : i + 1}</span>{t}
+              </li>
+            ))}
+          </ol>
 
           <div className="grid">
             {/* ---------- Chat ---------- */}
@@ -287,85 +312,115 @@ export default function App() {
                 <img className="avatar grande" src={mascotaCara} alt="" width="44" height="44" />
                 <div>
                   <strong>Asistente de presupuestos</strong>
-                  <small><i className="punto" aria-hidden="true" />{cargando ? 'Escribiendo…' : 'En línea'}</small>
+                  <small><i className={cargando ? 'punto activo' : 'punto'} aria-hidden="true" />{cargando ? 'Escribiendo…' : 'En línea'}</small>
                 </div>
               </div>
+
               <ol className="mensajes" ref={listaRef} aria-live="polite" aria-label="Conversación">
                 {visibles.map((m, i) =>
                   m.role === 'user' ? (
                     <li key={i} className="burbuja usuario">{m.content}</li>
                   ) : (
                     <li key={i} className="fila-bot">
-                      <img className="avatar" src={mascotaCara} alt="" width="32" height="32" />
+                      <img className="avatar" src={mascotaCara} alt="" width="30" height="30" />
                       <span className="burbuja bot">{m.content}</span>
                     </li>
                   )
                 )}
                 {cargando && (
                   <li className="fila-bot">
-                    <img className="avatar" src={mascotaCara} alt="" width="32" height="32" />
-                    <span className="burbuja bot escribiendo">Analizando tu solicitud…</span>
+                    <img className="avatar" src={mascotaCara} alt="" width="30" height="30" />
+                    <span className="burbuja bot puntos" aria-label="El asistente está escribiendo"><i /><i /><i /></span>
                   </li>
                 )}
                 {errorIA && (
-                  <li className="error" role="alert">
-                    <strong>{errorIA.reintentable ? 'El asistente no ha podido responder' : 'Revisa tu mensaje'}</strong>
-                    <p>{errorIA.mensaje}</p>
-                    {errorIA.reintentable && (
-                      <button type="button" className="btn-sec peq" onClick={() => llamar(mensajes)} disabled={cargando}>
-                        Reintentar
-                      </button>
-                    )}
-                  </li>
-                )}
-                {mensajes.length === 0 && !cargando && (
-                  <li className="ejemplos">
-                    <span>Prueba con un ejemplo:</span>
-                    {EJEMPLOS.map((t) => (
-                      <button key={t} type="button" className="chip" onClick={() => setBorrador(t)}>{t}</button>
-                    ))}
+                  <li className="aviso-error" role="alert">
+                    <IconoAlerta />
+                    <div>
+                      <strong>{errorIA.reintentable ? 'El asistente no ha podido responder' : 'Revisa tu mensaje'}</strong>
+                      <p>{errorIA.mensaje}</p>
+                      {errorIA.reintentable && (
+                        <button type="button" className="btn btn-secundario peq" onClick={() => llamar(mensajes)} disabled={cargando}>
+                          <IconoReiniciar /> Reintentar
+                        </button>
+                      )}
+                    </div>
                   </li>
                 )}
               </ol>
 
+              {mensajes.length === 0 && !cargando && (
+                <div className="ejemplos" role="group" aria-label="Ejemplos">
+                  <span>Prueba con:</span>
+                  {EJEMPLOS.map((e) => (
+                    <button key={e.etiqueta} type="button" className="chip" title={e.texto} onClick={() => { setBorrador(e.texto); textareaRef.current?.focus() }}>
+                      {e.etiqueta}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <form className="entrada" onSubmit={enviar}>
                 <label className="sr" htmlFor="mensaje">Describe tu proyecto</label>
-                <textarea
-                  id="mensaje"
-                  rows={3}
-                  value={borrador}
-                  placeholder="Describe tu proyecto o responde a las dudas del asistente…"
-                  onChange={(e) => setBorrador(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) enviar(e) }}
-                />
+                <div className="entrada-caja">
+                  <textarea
+                    id="mensaje"
+                    ref={textareaRef}
+                    rows={1}
+                    value={borrador}
+                    placeholder="Escribe tu mensaje…"
+                    onChange={(e) => setBorrador(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) enviar(e) }}
+                  />
+                  <button className="enviar" type="submit" disabled={cargando} aria-label="Enviar">
+                    <IconoEnviar />
+                  </button>
+                </div>
                 <div className="entrada-pie">
+                  <small>Enter para enviar · Shift + Enter para nueva línea</small>
                   <small className={borrador.length > MAX_MENSAJE ? 'contador excedido' : 'contador'}>
                     {borrador.length}/{MAX_MENSAJE}
                   </small>
-                  <button className="btn" type="submit" disabled={cargando}>
-                    {cargando ? 'Enviando…' : 'Enviar'}
-                  </button>
                 </div>
               </form>
             </div>
 
             {/* ---------- Propuesta ---------- */}
-            <section className="card propuesta" aria-label="Propuesta">
+            <section className="card propuesta" aria-labelledby="t-prop">
+              <div className="bloque">
+                <h3 id="t-prop">Datos del presupuesto</h3>
+                <label className="etiqueta" htmlFor="cliente">Cliente o empresa</label>
+                <input
+                  id="cliente"
+                  value={cliente}
+                  maxLength={120}
+                  placeholder="Ej.: Restaurante La Prueba S.L."
+                  onChange={(e) => setCliente(e.target.value)}
+                />
+              </div>
+
               {!hayPropuesta ? (
-                <div className="vacio">
-                  <p><strong>Tu propuesta aparecerá aquí.</strong></p>
-                  <p>Describe tu proyecto en el chat o añade servicios del catálogo manualmente.</p>
+                <div className="bloque">
+                  <p className="etiqueta">Lo que ofrecemos</p>
+                  <ul className="catalogo">
+                    {catalogo.map((s) => (
+                      <li key={s.id}>
+                        <div><strong>{s.nombre}</strong><small>{s.descripcion}</small></div>
+                        <span className="precio">{precioTexto(s)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="hint centrado">Cuéntale tu proyecto al asistente y aquí aparecerá tu propuesta.</p>
                 </div>
               ) : (
                 <>
-                  <h3>Propuesta</h3>
-                  <div className="campo">
-                    <label htmlFor="resumen">Resumen del proyecto</label>
+                  <div className="bloque">
+                    <label className="etiqueta" htmlFor="resumen">Resumen del proyecto</label>
                     <textarea id="resumen" rows={3} value={resumen} maxLength={1500} onChange={(e) => setResumen(e.target.value)} />
                   </div>
 
-                  <div>
-                    <p className="etiqueta">Servicios</p>
+                  <div className="bloque">
+                    <p className="etiqueta">Servicios <span className="contador-servicios">{incluidos.length} incluidos</span></p>
                     {seleccion.length === 0 && <p className="hint">No hay servicios seleccionados.</p>}
                     <ul className="servicios">
                       {seleccion.map((s) => {
@@ -373,33 +428,40 @@ export default function App() {
                         if (!def) return null
                         const falta = s.incluido && faltan.includes(def)
                         return (
-                          <li key={s.id} className={s.incluido ? 'servicio' : 'servicio descartado'}>
-                            <label className="interruptor">
-                              <input type="checkbox" checked={s.incluido} onChange={(e) => cambiarServicio(s.id, { incluido: e.target.checked })} />
-                              <span>
+                          <li key={s.id} className={`servicio${s.incluido ? '' : ' descartado'}${falta ? ' incompleto' : ''}`}>
+                            <div className="servicio-cab">
+                              <label className="switch">
+                                <input type="checkbox" checked={s.incluido} onChange={(e) => cambiarServicio(s.id, { incluido: e.target.checked })} />
+                                <i aria-hidden="true" />
                                 <strong>{def.nombre}</strong>
-                                <small>{def.regla === 'Precio fijo' ? eur(def.precio) : def.regla}</small>
-                              </span>
-                            </label>
+                              </label>
+                              <span className={s.origen === 'ia' ? 'etiq ia' : 'etiq manual'}>{s.origen === 'ia' ? 'Sugerido' : 'Añadido'}</span>
+                              <span className="precio">{precioTexto(def)}</span>
+                            </div>
                             <p className="desc">{def.descripcion}</p>
-                            {s.justificacion && <p className="just">{s.origen === 'ia' ? 'Por qué: ' : ''}{s.justificacion}</p>}
+                            {s.justificacion && <p className="just"><IconoChispa /> {s.justificacion}</p>}
                             {def.cantidad && s.incluido && (
                               <div className="cantidad">
                                 <label htmlFor={`c-${s.id}`}>{def.cantidad.etiqueta}</label>
-                                <input
-                                  id={`c-${s.id}`}
-                                  type="number"
-                                  min={def.cantidad.min}
-                                  max={def.cantidad.max}
-                                  value={s.cantidad ?? ''}
-                                  aria-invalid={falta}
-                                  onChange={(e) => cambiarServicio(s.id, { cantidad: e.target.value === '' ? null : Number(e.target.value) })}
-                                />
-                                {falta && <p className="msg-error">Completa este dato ({def.cantidad.min}-{def.cantidad.max}) para continuar.</p>}
+                                <div className="stepper">
+                                  <button type="button" aria-label="Restar" onClick={() => ajustarCantidad(s.id, def, -1)}>−</button>
+                                  <input
+                                    id={`c-${s.id}`}
+                                    type="number"
+                                    min={def.cantidad.min}
+                                    max={def.cantidad.max}
+                                    value={s.cantidad ?? ''}
+                                    placeholder="?"
+                                    aria-invalid={falta}
+                                    onChange={(e) => cambiarServicio(s.id, { cantidad: e.target.value === '' ? null : Number(e.target.value) })}
+                                  />
+                                  <button type="button" aria-label="Sumar" onClick={() => ajustarCantidad(s.id, def, 1)}>+</button>
+                                </div>
+                                {falta && <p className="msg-error">Indica un número entre {def.cantidad.min} y {def.cantidad.max} para continuar.</p>}
                               </div>
                             )}
                             {s.origen === 'manual' && (
-                              <button type="button" className="btn-link peq" onClick={() => quitarServicio(s.id)}>Quitar</button>
+                              <button type="button" className="quitar" onClick={() => quitarServicio(s.id)}>Quitar</button>
                             )}
                           </li>
                         )
@@ -411,21 +473,22 @@ export default function App() {
                         <select id="anadir" value={anadir} onChange={(e) => setAnadir(e.target.value)}>
                           <option value="">Añadir servicio del catálogo…</option>
                           {disponibles.map((s) => (
-                            <option key={s.id} value={s.id}>{s.nombre} · {s.regla === 'Precio fijo' ? eur(s.precio) : s.regla}</option>
+                            <option key={s.id} value={s.id}>{s.nombre} · {precioTexto(s)}</option>
                           ))}
                         </select>
-                        <button type="submit" className="btn-sec peq" disabled={!anadir}>Añadir</button>
+                        <button type="submit" className="btn btn-secundario peq" disabled={!anadir}>Añadir</button>
                       </form>
                     )}
                   </div>
 
-                  <div>
+                  <div className="bloque">
                     <p className="etiqueta">Aclaraciones y pendientes</p>
                     {aclaraciones.length === 0 && <p className="hint">No hay aspectos pendientes.</p>}
                     <ul className="aclaraciones">
                       {aclaraciones.map((a, i) => (
                         <li key={i} className={a.tipo}>
-                          <span>{a.texto}</span>
+                          <span className="etiq">{a.tipo === 'duda' ? 'Duda' : a.tipo === 'fuera' ? 'Fuera de catálogo' : 'Nota'}</span>
+                          <span className="texto">{a.texto}</span>
                           <button type="button" aria-label="Eliminar aclaración" onClick={() => setAclaraciones((l) => l.filter((_, j) => j !== i))}>×</button>
                         </li>
                       ))}
@@ -438,47 +501,67 @@ export default function App() {
                     }}>
                       <label className="sr" htmlFor="nota">Añadir aclaración</label>
                       <input id="nota" value={nuevaNota} maxLength={400} placeholder="Añadir una nota…" onChange={(e) => setNuevaNota(e.target.value)} />
-                      <button type="submit" className="btn-sec peq">Añadir</button>
+                      <button type="submit" className="btn btn-secundario peq">Añadir</button>
                     </form>
                   </div>
 
-                  {(faltan.length > 0 || sinBase) && (
-                    <p className="msg-error">
-                      {sinBase ? 'Incluye un tipo de web (landing o corporativa). ' : ''}
-                      {faltan.length > 0 ? 'Faltan datos para calcular algunas partidas.' : ''}
-                    </p>
-                  )}
-
-                  <button className="btn" type="button" onClick={calcular} disabled={calculando || faltan.length > 0}>
-                    {calculando ? 'Calculando…' : cotizacion ? 'Recalcular presupuesto' : 'Calcular presupuesto'}
-                  </button>
-
-                  {errorCot && <div className="error" role="alert"><strong>No se pudo calcular</strong><p>{errorCot}</p></div>}
-
-                  {cotizacion && (
-                    <div className="resultado">
-                      <div className="resultado-cab">
-                        <h3>Presupuesto</h3>
-                        {obsoleto && <span className="aviso">Has cambiado datos: recalcula</span>}
-                      </div>
-                      <dl className={obsoleto ? 'obsoleto' : ''}>
-                        {cotizacion.lineas.map((l) => (
-                          <div key={l.id}>
-                            <dt>{l.nombre}{l.cantidad > 1 ? ` (${l.cantidad} × ${eur(l.precioUnitario)})` : ''}</dt>
-                            <dd>{eur(l.importe)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                      <div className={obsoleto ? 'total obsoleto' : 'total'}>
-                        <span>Total</span>
-                        <strong>{eur(cotizacion.total)}</strong>
-                      </div>
-                      <p className="hint">IVA no incluido. Importe calculado por el servidor.</p>
-                      <button className="btn-verde" type="button" disabled={obsoleto} onClick={() => dialogoRef.current?.showModal()}>
-                        Revisar y descargar PDF
-                      </button>
+                  <div className="bloque acciones-finales">
+                    {/* el nombre se repite aquí (mismo estado que el campo de arriba) para tenerlo a la vista al calcular */}
+                    <div className={cliente.trim() ? 'campo-final' : 'campo-final falta-cliente'}>
+                      <label className="etiqueta" htmlFor="cliente-final">Presupuesto a nombre de</label>
+                      <input
+                        id="cliente-final"
+                        value={cliente}
+                        maxLength={120}
+                        placeholder="Nombre del cliente o empresa"
+                        onChange={(e) => setCliente(e.target.value)}
+                      />
+                      {!cliente.trim() && <p className="hint">Indícalo para poder calcular. Aparecerá en el presupuesto y en el PDF.</p>}
                     </div>
-                  )}
+                    {(faltan.length > 0 || sinBase) && (
+                      <p className="msg-error">
+                        <IconoAlerta />
+                        {sinBase ? 'Incluye un tipo de web (landing o corporativa). ' : ''}
+                        {faltan.length > 0 ? 'Faltan datos para calcular algunas partidas.' : ''}
+                      </p>
+                    )}
+                    <button className="btn btn-primario ancho" type="button" onClick={calcular} disabled={calculando || faltan.length > 0 || !cliente.trim()}>
+                      {calculando ? 'Calculando…' : cotizacion ? 'Recalcular presupuesto' : 'Calcular presupuesto'}
+                    </button>
+
+                    {errorCot && (
+                      <div className="aviso-error" role="alert">
+                        <IconoAlerta />
+                        <div><strong>No se pudo calcular</strong><p>{errorCot}</p></div>
+                      </div>
+                    )}
+
+                    {cotizacion && (
+                      <div className={obsoleto ? 'resultado obsoleto' : 'resultado'}>
+                        <div className="resultado-cab">
+                          <small>Presupuesto para</small>
+                          <strong>{cotizacion.cliente}</strong>
+                          <small>{cotizacion.fecha}</small>
+                        </div>
+                        {obsoleto && <span className="aviso">Has cambiado datos: recalcula</span>}
+                        <dl>
+                          {cotizacion.lineas.map((l) => (
+                            <div key={l.id}>
+                              <dt>{l.nombre}{l.cantidad > 1 ? <small> {l.cantidad} × {eur(l.precioUnitario)}</small> : null}</dt>
+                              <dd>{eur(l.importe)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <div className="total">
+                          <span>Total <small>IVA no incluido</small></span>
+                          <strong>{eur(cotizacion.total)}</strong>
+                        </div>
+                        <button className="btn btn-verde ancho" type="button" disabled={obsoleto} onClick={() => dialogoRef.current?.showModal()}>
+                          <IconoDoc /> Revisar y descargar PDF
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </section>
@@ -487,10 +570,11 @@ export default function App() {
 
         <section className="seccion alt" id="como" aria-labelledby="t-como">
           <h2 id="t-como">Cómo funciona</h2>
+          <p className="sub">Tú pones la idea; nosotros la convertimos en un presupuesto claro.</p>
           <ol className="pasos">
-            <li><span>1</span><h3>Cuéntanos</h3><p>Explica tu proyecto en el chat. El asistente te propone servicios de nuestro catálogo.</p></li>
-            <li><span>2</span><h3>Revisa</h3><p>Acepta, quita o añade servicios y resuelve las dudas pendientes.</p></li>
-            <li><span>3</span><h3>Descarga</h3><p>El servidor calcula los importes y generas el presupuesto en PDF.</p></li>
+            <li><span className="icono"><IconoChat /></span><h3>Cuéntanos</h3><p>Explica tu proyecto en el chat. El asistente lo relaciona con los servicios de nuestro catálogo.</p></li>
+            <li><span className="icono"><IconoLista /></span><h3>Revisa</h3><p>Acepta, quita o añade servicios, completa los datos que falten y resuelve las dudas.</p></li>
+            <li><span className="icono"><IconoDoc /></span><h3>Descarga</h3><p>El servidor calcula los importes con las tarifas vigentes y generas el PDF.</p></li>
           </ol>
         </section>
       </main>
@@ -499,45 +583,50 @@ export default function App() {
       <dialog className="dialogo" ref={dialogoRef} aria-labelledby="t-prev">
         {cotizacion && (
           <>
-            <h2 id="t-prev" className="sr">Vista previa del presupuesto</h2>
-            <article className="papel">
-              <header className="papel-cab">
-                <strong>Presupuesta mi web</strong>
-                <span>Presupuesto de desarrollo web</span>
-              </header>
-              <p><b>Cliente:</b> {cotizacion.cliente}<br /><b>Fecha:</b> {cotizacion.fecha}</p>
-              <h3>Resumen del proyecto</h3>
-              <p>{cotizacion.resumen || 'Sin resumen.'}</p>
-              <h3>Servicios incluidos</h3>
-              {cotizacion.lineas.map((l) => (
-                <div key={l.id} className="papel-servicio">
-                  <b>{l.nombre}{l.cantidad > 1 ? ` (x${l.cantidad})` : ''}</b>
-                  <p>{l.descripcion}</p>
-                  {l.justificacion && <p><i>Motivo: {l.justificacion}</i></p>}
-                </div>
-              ))}
-              <h3>Desglose de importes</h3>
-              <table>
-                <tbody>
-                  {cotizacion.lineas.map((l) => (
-                    <tr key={l.id}>
-                      <td>{l.nombre}{l.cantidad > 1 ? `: ${l.cantidad} × ${eur(l.precioUnitario)}` : ''}</td>
-                      <td>{eur(l.importe)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot><tr><th>TOTAL</th><th>{eur(cotizacion.total)}</th></tr></tfoot>
-              </table>
-              <p className="papel-nota">IVA no incluido. Importes calculados con las tarifas vigentes.</p>
-              <h3>Aclaraciones y aspectos pendientes</h3>
-              {cotizacion.aclaraciones.length ? (
-                <ul>{cotizacion.aclaraciones.map((a, i) => <li key={i}>{a}</li>)}</ul>
-              ) : <p>No hay aspectos pendientes.</p>}
-            </article>
+            <div className="dialogo-cab">
+              <h2 id="t-prev">Presupuesto para {cotizacion.cliente}</h2>
+              <button type="button" className="cerrar" aria-label="Cerrar" onClick={() => dialogoRef.current?.close()}>×</button>
+            </div>
+            <div className="dialogo-cuerpo">
+              <article className="papel">
+                <header className="papel-cab">
+                  <strong>Presupuesta mi web</strong>
+                  <span>Presupuesto de desarrollo web</span>
+                </header>
+                <p><b>Cliente:</b> {cotizacion.cliente}<br /><b>Fecha:</b> {cotizacion.fecha}</p>
+                <h3>Resumen del proyecto</h3>
+                <p>{cotizacion.resumen || 'Sin resumen.'}</p>
+                <h3>Servicios incluidos</h3>
+                {cotizacion.lineas.map((l) => (
+                  <div key={l.id} className="papel-servicio">
+                    <b>{l.nombre}{l.cantidad > 1 ? ` (x${l.cantidad})` : ''}</b>
+                    <p>{l.descripcion}</p>
+                    {l.justificacion && <p><i>Motivo: {l.justificacion}</i></p>}
+                  </div>
+                ))}
+                <h3>Desglose de importes</h3>
+                <table>
+                  <tbody>
+                    {cotizacion.lineas.map((l) => (
+                      <tr key={l.id}>
+                        <td>{l.nombre}{l.cantidad > 1 ? `: ${l.cantidad} × ${eur(l.precioUnitario)}` : ''}</td>
+                        <td>{eur(l.importe)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr><th>TOTAL</th><th>{eur(cotizacion.total)}</th></tr></tfoot>
+                </table>
+                <p className="papel-nota">IVA no incluido. Importes calculados con las tarifas vigentes.</p>
+                <h3>Aclaraciones y aspectos pendientes</h3>
+                {cotizacion.aclaraciones.length ? (
+                  <ul>{cotizacion.aclaraciones.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                ) : <p>No hay aspectos pendientes.</p>}
+              </article>
+            </div>
             <div className="dialogo-acciones">
-              <button type="button" className="btn-link" onClick={() => dialogoRef.current?.close()}>Volver a editar</button>
-              <button type="button" className="btn-verde" onClick={descargarPdf} disabled={descargando}>
-                {descargando ? 'Generando…' : 'Aceptar y descargar PDF'}
+              <button type="button" className="btn btn-fantasma" onClick={() => dialogoRef.current?.close()}>Volver a editar</button>
+              <button type="button" className="btn btn-verde" onClick={descargarPdf} disabled={descargando}>
+                <IconoDescarga /> {descargando ? 'Generando…' : 'Aceptar y descargar PDF'}
               </button>
             </div>
           </>
@@ -545,9 +634,26 @@ export default function App() {
       </dialog>
 
       <footer className="pie">
-        <p>presupuesto<b>.web</b> · Práctica de API con Express, React y OpenAI</p>
+        <a className="logo" href="#inicio">
+          <img src={mascotaCara} alt="" width="26" height="26" />
+          <span>presupuesto<b>.web</b></span>
+        </a>
+        <p>Práctica de API con Express, React y OpenAI · Precios orientativos, IVA no incluido</p>
         <a href="#inicio">Volver arriba ↑</a>
       </footer>
     </>
   )
 }
+
+/* ---------- Iconos (SVG en línea, heredan el color del texto) ---------- */
+const svg = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
+const IconoEnviar = () => <svg {...svg}><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7z" /></svg>
+const IconoFlecha = () => <svg {...svg}><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
+const IconoCheck = () => <svg {...svg}><path d="M20 6 9 17l-5-5" /></svg>
+const IconoChispa = () => <svg {...svg}><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z" /></svg>
+const IconoReiniciar = () => <svg {...svg}><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 3v6h6" /></svg>
+const IconoAlerta = () => <svg {...svg}><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><path d="M12 16h.01" /></svg>
+const IconoDoc = () => <svg {...svg}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg>
+const IconoDescarga = () => <svg {...svg}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
+const IconoChat = () => <svg {...svg}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+const IconoLista = () => <svg {...svg}><path d="M9 6h11" /><path d="M9 12h11" /><path d="M9 18h11" /><path d="m3 6 1 1 2-2" /><path d="m3 12 1 1 2-2" /><path d="m3 18 1 1 2-2" /></svg>

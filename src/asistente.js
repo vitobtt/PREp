@@ -28,6 +28,7 @@ REGLAS OBLIGATORIAS:
 - Usa solo los "id" del catálogo. Nunca inventes servicios.
 - Elige exactamente un tipo de web base: "landing" o "corporativa".
 - La web base ya incluye la primera página. Si el cliente necesita más páginas, añade "paginas-adicionales" con "cantidad" = número de páginas extra. Si no sabes cuántas, pon cantidad null y pregúntalo en "dudas".
+- Los contenidos o secciones (carta, menú, galería, quiénes somos, servicios, contacto, equipo...) NO son servicios aparte: son páginas. Cúbrelos con la web base y "paginas-adicionales"; nunca los pongas en "fueraDeCatalogo".
 - Para el resto de servicios, "cantidad" es null.
 - Si el cliente pide algo que no está en el catálogo (tienda online, pasarela de pago, blog, SEO, logotipo, hosting, mantenimiento, sistema de reservas con disponibilidad en tiempo real...), NO lo encajes a la fuerza: añádelo a "fueraDeCatalogo" como necesidad pendiente de valorar.
 - Si la petición es ambigua, propone lo razonable y anota en "dudas" las preguntas concretas que el cliente debe aclarar.
