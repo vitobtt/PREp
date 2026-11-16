@@ -1,2 +1,0 @@
-// Función serverless de Vercel: todas las rutas /api/* llegan aquí (ver vercel.json)
-module.exports = require('../src/app')

@@ -182,6 +182,6 @@ Pendiente de probar con una clave real: solicitud clara (restaurante), ambigua (
 ## Despliegue en Vercel
 
 - `npm run build` compila el cliente React en `public/` (Vercel lo sirve como estático).
-- La API Express está en `src/app.js` y se expone como función en `api/index.js` (`vercel.json` redirige `/api/*`).
+- Vercel usa el preset **Express**: detecta `src/app.js` (exporta la app) y sirve `public/` como estático. No hay que configurar Output Directory.
 - En Vercel → Settings → Environment Variables define `OPENAI_API_KEY` (y opcionalmente `OPENAI_MODEL`) y vuelve a desplegar.
 - En local también puedes hacer `npm run build && npm start` y abrir `http://localhost:3000`.

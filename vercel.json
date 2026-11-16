@@ -1,12 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
-  "outputDirectory": "public",
-  "functions": {
-    "api/index.js": {
-      "maxDuration": 60,
-      "includeFiles": "node_modules/pdfkit/js/data/**"
-    }
-  },
-  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
+  "framework": "express",
+  "buildCommand": "npm run build"
 }

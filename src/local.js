@@ -1,4 +1,4 @@
-// Arranque en local: npm start (en Vercel se usa src/app.js o api/index.js)
+// Arranque en local: npm start (en Vercel se usa src/app.js)
 const app = require('./app')
 const PORT = process.env.PORT || 3000
 
