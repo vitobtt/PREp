@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import mascota from './assets/mascota.webp'
+import mascotaCara from './assets/mascota-cara.webp'
 
 const eur = (n) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
@@ -231,6 +233,8 @@ export default function App() {
       <header className="hero" id="inicio">
         <div className="orbe orbe-a" aria-hidden="true" />
         <div className="orbe orbe-b" aria-hidden="true" />
+        <div className="hero-grid">
+        <div className="hero-texto">
         <h1>Cuéntanos tu web<br />y te preparamos el presupuesto</h1>
         <p className="lead">
           Describe tu proyecto con tus palabras. Nuestro asistente te propone los servicios, tú los revisas y descargas el presupuesto en PDF.
@@ -245,7 +249,12 @@ export default function App() {
           />
           <button type="submit" className="btn-verde">Empezar</button>
         </form>
-        <div className="hero-espacio" />
+        </div>
+        <figure className="hero-mascota" aria-hidden="true">
+          <span className="bocadillo">¿Hablamos de tu web?</span>
+          <img src={mascota} alt="" width="520" height="847" />
+        </figure>
+        </div>
       </header>
 
       <main>
@@ -274,11 +283,30 @@ export default function App() {
           <div className="grid">
             {/* ---------- Chat ---------- */}
             <div className="card chat">
+              <div className="chat-cab">
+                <img className="avatar grande" src={mascotaCara} alt="" width="44" height="44" />
+                <div>
+                  <strong>Asistente de presupuestos</strong>
+                  <small><i className="punto" aria-hidden="true" />{cargando ? 'Escribiendo…' : 'En línea'}</small>
+                </div>
+              </div>
               <ol className="mensajes" ref={listaRef} aria-live="polite" aria-label="Conversación">
-                {visibles.map((m, i) => (
-                  <li key={i} className={`burbuja ${m.role === 'user' ? 'usuario' : 'bot'}`}>{m.content}</li>
-                ))}
-                {cargando && <li className="burbuja bot escribiendo">Analizando tu solicitud…</li>}
+                {visibles.map((m, i) =>
+                  m.role === 'user' ? (
+                    <li key={i} className="burbuja usuario">{m.content}</li>
+                  ) : (
+                    <li key={i} className="fila-bot">
+                      <img className="avatar" src={mascotaCara} alt="" width="32" height="32" />
+                      <span className="burbuja bot">{m.content}</span>
+                    </li>
+                  )
+                )}
+                {cargando && (
+                  <li className="fila-bot">
+                    <img className="avatar" src={mascotaCara} alt="" width="32" height="32" />
+                    <span className="burbuja bot escribiendo">Analizando tu solicitud…</span>
+                  </li>
+                )}
                 {errorIA && (
                   <li className="error" role="alert">
                     <strong>{errorIA.reintentable ? 'El asistente no ha podido responder' : 'Revisa tu mensaje'}</strong>
