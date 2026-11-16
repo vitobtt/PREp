@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm install && npm install --prefix cliente",
+  "buildCommand": "npm run build --prefix cliente",
+  "outputDirectory": "cliente/dist",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/pdfkit/js/data/**"
+    }
+  },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api" }]
+}
