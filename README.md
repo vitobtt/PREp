@@ -23,7 +23,7 @@ Debe mostrarse `api en http://localhost:3000`. Para detener el servidor: `Ctrl +
 
 ## Puerto
 
-El servidor escucha en el puerto **3000** (definido en `src/server.js`).
+El servidor escucha en el puerto **3000** (definido en `src/local.js`).
 Base de la API: `http://localhost:3000`
 
 ## Rutas
@@ -178,3 +178,10 @@ Archivos: `src/catalogo.js` (catálogo y cálculo), `src/asistente.js` (llamada 
 | PDF | 200 · `application/pdf` con cliente, fecha, resumen, servicios, desglose, total y aclaraciones ✅ |
 
 Pendiente de probar con una clave real: solicitud clara (restaurante), ambigua ("algo sencillo") y fuera de catálogo (tienda online); el chat incluye esos tres ejemplos.
+
+## Despliegue en Vercel
+
+- `npm run build` compila el cliente React en `public/` (Vercel lo sirve como estático).
+- La API Express está en `src/app.js` y se expone como función en `api/index.js` (`vercel.json` redirige `/api/*`).
+- En Vercel → Settings → Environment Variables define `OPENAI_API_KEY` (y opcionalmente `OPENAI_MODEL`) y vuelve a desplegar.
+- En local también puedes hacer `npm run build && npm start` y abrir `http://localhost:3000`.

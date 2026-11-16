@@ -23,6 +23,8 @@ const MAX_MENSAJES = 20
 const MAX_CLIENTE = 120
 
 app.use(express.json({ limit: '100kb' }))
+// cliente React compilado (npm run build). En Vercel lo sirve la CDN directamente.
+app.use(express.static(path.join(__dirname, '..', 'public')))
 
 function validar(body) {
       if (typeof body !== 'object' || body === null) {
