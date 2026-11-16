@@ -2,8 +2,24 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Presupuesto mi web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Presupuesta mi web · Presupuestos web con IA</title>
+    <meta name="description" content="Describe la web que necesitas, nuestro asistente con IA te propone los servicios y descargas el presupuesto en PDF al momento." />
+    <meta name="theme-color" content="#0b0c1f" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Presupuesta mi web" />
+    <meta property="og:description" content="Cuéntanos tu web y te preparamos el presupuesto con IA. Revisa los servicios y descarga el PDF." />
+    <meta property="og:image" content="/favicon.png" />
+    <script>
+      // aplica el tema guardado (o el del sistema) antes de pintar, para evitar parpadeos
+      try {
+        var t = localStorage.getItem('tema')
+        if (!t) t = matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro'
+        document.documentElement.dataset.tema = t
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

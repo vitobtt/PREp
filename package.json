@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/local.js",
-    "build": "npm install --prefix cliente && npm run build --prefix cliente"
+    "build": "npm install --prefix cliente && npm run build --prefix cliente",
+    "test": "node --test \"test/*.test.js\""
   },
   "keywords": [],
   "author": "",

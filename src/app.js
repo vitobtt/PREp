@@ -1,4 +1,5 @@
 const path = require('path')
+const crypto = require('crypto')
 const express = require('express')
 const { calcularPresupuesto } = require('./presupuesto')
 const { CATALOGO, calcularCotizacion } = require('./catalogo')
@@ -21,6 +22,22 @@ const app = express()
 const MAX_MENSAJE = 1500
 const MAX_MENSAJES = 20
 const MAX_CLIENTE = 120
+
+// Límite de consultas al asistente por IP: protege la clave de OpenAI de abusos
+// (la web es pública y cada consulta tiene coste).
+const LIMITE_CONSULTAS = Number(process.env.LIMITE_ASISTENTE) || 30
+const VENTANA_MS = 10 * 60 * 1000
+const consultas = new Map()
+
+function superaLimite(ip) {
+  const ahora = Date.now()
+  if (consultas.size > 5000) consultas.clear()
+  const recientes = (consultas.get(ip) || []).filter((t) => ahora - t < VENTANA_MS)
+  if (recientes.length >= LIMITE_CONSULTAS) return true
+  recientes.push(ahora)
+  consultas.set(ip, recientes)
+  return false
+}
 
 app.use(express.json({ limit: '100kb' }))
 // cliente React compilado (npm run build). En Vercel lo sirve la CDN directamente.
@@ -92,15 +109,20 @@ function prepararDocumento(body) {
   const justificaciones = new Map(
     (body.servicios || []).map((s) => [s.id, typeof s.justificacion === 'string' ? s.justificacion.slice(0, 400) : ''])
   )
-  return {
+  const hoy = new Date()
+  const doc = {
     cliente,
-    fecha: new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
+    fecha: hoy.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }),
     resumen: (body.resumen || '').trim(),
     lineas: calculo.lineas.map((l) => ({ ...l, justificacion: justificaciones.get(l.id) || '' })),
     total: calculo.total,
     moneda: calculo.moneda,
     aclaraciones: aclaraciones.map((a) => a.trim()).filter(Boolean)
   }
+  // referencia estable: la misma selección el mismo día da la misma referencia en pantalla y en el PDF
+  const huella = crypto.createHash('sha1').update(JSON.stringify(doc)).digest('hex').slice(0, 6).toUpperCase()
+  doc.referencia = `PMW-${hoy.toISOString().slice(0, 10).replace(/-/g, '')}-${huella}`
+  return doc
 }
 
 app.get('/api/estado', (req, res) => {
@@ -129,6 +151,10 @@ app.post('/api/presupuesto', (req, res) => {
 app.post('/api/asistente', async (req, res) => {
   const error = validarChat(req.body)
   if (error) return res.status(400).json({ error })
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim()
+  if (superaLimite(ip)) {
+    return res.status(429).json({ error: 'Has hecho muchas consultas seguidas. Espera unos minutos y vuelve a intentarlo.', reintentable: true })
+  }
   try {
     const mensajes = req.body.mensajes.map((m) => ({ role: m.role, content: m.content.trim() }))
     const propuesta = await pedirPropuesta({ cliente: (req.body.cliente || '').trim(), mensajes })

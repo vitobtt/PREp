@@ -8,9 +8,9 @@ const eur = (n) =>
 const MAX_MENSAJE = 1500
 
 const EJEMPLOS = [
-  { etiqueta: 'Restaurante con reservas', texto: 'Necesito una web para un restaurante. Quiero mostrar la carta, tener un formulario para solicitar reservas y ofrecer el contenido en dos idiomas.' },
-  { etiqueta: 'Algo sencillo', texto: 'Quiero algo sencillo para mi negocio, que se vea bien.' },
-  { etiqueta: 'Tienda online', texto: 'Necesito una tienda online con pasarela de pago para vender ropa.' }
+  { tipo: 'restaurante', etiqueta: 'Restaurante con reservas', texto: 'Necesito una web para un restaurante. Quiero mostrar la carta, tener un formulario para solicitar reservas y ofrecer el contenido en dos idiomas.' },
+  { tipo: 'sencillo', etiqueta: 'Algo sencillo', texto: 'Quiero algo sencillo para mi negocio, que se vea bien.' },
+  { tipo: 'tienda', etiqueta: 'Tienda online', texto: 'Necesito una tienda online con pasarela de pago para vender ropa.' }
 ]
 
 const BIENVENIDA = {
@@ -43,10 +43,55 @@ export default function App() {
   const [errorCot, setErrorCot] = useState(null)
   const [calculando, setCalculando] = useState(false)
   const [descargando, setDescargando] = useState(false)
+  const [toast, setToast] = useState(null)
 
   const listaRef = useRef(null)
   const dialogoRef = useRef(null)
   const textareaRef = useRef(null)
+  const resultadoRef = useRef(null)
+  const mascotaRef = useRef(null)
+
+  // Tema claro / oscuro (el valor inicial lo pone index.html antes de pintar)
+  const [tema, setTema] = useState(() => document.documentElement.dataset.tema || 'oscuro')
+  useEffect(() => {
+    document.documentElement.dataset.tema = tema
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', tema === 'claro' ? '#f6f5fb' : '#0b0c1f')
+    try { localStorage.setItem('tema', tema) } catch { /* modo privado */ }
+  }, [tema])
+
+  // Botón "volver arriba"
+  const [scrollado, setScrollado] = useState(false)
+  useEffect(() => {
+    const alScroll = () => setScrollado(window.scrollY > 900)
+    window.addEventListener('scroll', alScroll, { passive: true })
+    return () => window.removeEventListener('scroll', alScroll)
+  }, [])
+
+  // Las secciones aparecen suavemente al entrar en pantalla
+  useEffect(() => {
+    const elementos = document.querySelectorAll('.revelar')
+    if (!('IntersectionObserver' in window)) { elementos.forEach((e) => e.classList.add('visible')); return }
+    const obs = new IntersectionObserver((entradas) => {
+      entradas.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target) } })
+    }, { threshold: 0.12 })
+    elementos.forEach((e) => obs.observe(e))
+    return () => obs.disconnect()
+  }, [])
+
+  // El muñeco se inclina un poco siguiendo el ratón
+  function moverMascota(e) {
+    const el = mascotaRef.current
+    if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - r.left) / r.width - 0.5
+    const y = (e.clientY - r.top) / r.height - 0.5
+    el.style.setProperty('--ry', `${x * 10}deg`)
+    el.style.setProperty('--rx', `${-y * 8}deg`)
+  }
+  const soltarMascota = () => { mascotaRef.current?.style.setProperty('--ry', '0deg'); mascotaRef.current?.style.setProperty('--rx', '0deg') }
+
+  // En móvil, barra con el total mientras el resultado no está a la vista
+  const [resultadoVisible, setResultadoVisible] = useState(false)
 
   useEffect(() => {
     fetch('/api/catalogo').then((r) => r.json()).then(setCatalogo).catch(() => {})
@@ -64,6 +109,12 @@ export default function App() {
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 160) + 'px'
   }, [borrador])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const porId = useMemo(() => new Map(catalogo.map((s) => [s.id, s])), [catalogo])
 
@@ -217,6 +268,7 @@ export default function App() {
       document.body.appendChild(a); a.click(); a.remove()
       URL.revokeObjectURL(url)
       dialogoRef.current?.close()
+      setToast(`PDF descargado: ${nombre}`)
     } catch (e) {
       setErrorCot(`No se pudo generar el PDF: ${e.message}`)
       dialogoRef.current?.close()
@@ -225,6 +277,15 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    const el = resultadoRef.current
+    if (!el || !('IntersectionObserver' in window)) return
+    const obs = new IntersectionObserver(([e]) => setResultadoVisible(e.isIntersecting), { threshold: 0.2 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [cotizacion])
+
+  const totalAnimado = useContador(cotizacion?.total ?? 0)
   const visibles = [BIENVENIDA, ...mensajes]
   const paso = cotizacion && !obsoleto ? 3 : hayPropuesta ? 2 : 1
   const precioTexto = (def) => (def.regla === 'Precio fijo' ? eur(def.precio) : def.regla)
@@ -246,11 +307,22 @@ export default function App() {
         </a>
         <ul>
           <li><a href="#como">Cómo funciona</a></li>
-          <li><a className="nav-cta" href="#asistente">Pedir presupuesto</a></li>
+          <li><a className="nav-cta" href="#asistente"><span className="largo">Pedir presupuesto</span><span className="corto">Empezar</span></a></li>
+          <li>
+            <button
+              type="button"
+              className="tema"
+              onClick={() => setTema(tema === 'claro' ? 'oscuro' : 'claro')}
+              aria-label={tema === 'claro' ? 'Activar tema oscuro' : 'Activar tema claro'}
+              title={tema === 'claro' ? 'Tema oscuro' : 'Tema claro'}
+            >
+              {tema === 'claro' ? <IconoLuna /> : <IconoSol />}
+            </button>
+          </li>
         </ul>
       </nav>
 
-      <header className="hero" id="inicio">
+      <header className="hero" id="inicio" onMouseMove={moverMascota} onMouseLeave={soltarMascota}>
         <div className="hero-grid">
           <div className="hero-texto">
             <span className="eyebrow"><IconoChispa /> Presupuestos web con IA</span>
@@ -276,7 +348,7 @@ export default function App() {
               <li><IconoCheck /> PDF al momento</li>
             </ul>
           </div>
-          <figure className="hero-mascota" aria-hidden="true">
+          <figure className="hero-mascota" aria-hidden="true" ref={mascotaRef}>
             <span className="bocadillo">¿Hablamos de tu web?</span>
             <img src={mascota} alt="" width="520" height="847" />
           </figure>
@@ -285,7 +357,7 @@ export default function App() {
 
       <main>
         <section className="seccion" id="asistente" aria-labelledby="t-asis">
-          <div className="cab-seccion">
+          <div className="cab-seccion revelar">
             <div>
               <h2 id="t-asis">Tu presupuesto en tres pasos</h2>
               <p className="sub">La IA propone los servicios; los importes los calcula nuestro servidor con las tarifas vigentes.</p>
@@ -297,7 +369,7 @@ export default function App() {
             )}
           </div>
 
-          <ol className="progreso" aria-label="Progreso">
+          <ol className="progreso revelar" aria-label="Progreso">
             {['Describe tu proyecto', 'Revisa la propuesta', 'Descarga el PDF'].map((t, i) => (
               <li key={t} className={paso > i + 1 ? 'hecho' : paso === i + 1 ? 'actual' : ''} aria-current={paso === i + 1 ? 'step' : undefined}>
                 <span>{paso > i + 1 ? <IconoCheck /> : i + 1}</span>{t}
@@ -305,7 +377,7 @@ export default function App() {
             ))}
           </ol>
 
-          <div className="grid">
+          <div className="grid revelar">
             {/* ---------- Chat ---------- */}
             <div className="card chat">
               <div className="chat-cab">
@@ -326,6 +398,21 @@ export default function App() {
                       <span className="burbuja bot">{m.content}</span>
                     </li>
                   )
+                )}
+                {mensajes.length === 0 && !cargando && (
+                  <li className="sugerencias">
+                    <span className="sugerencias-tit">Ideas para empezar</span>
+                    {EJEMPLOS.map((e) => {
+                      const Icono = ICONO_EJEMPLO[e.tipo]
+                      return (
+                        <button key={e.etiqueta} type="button" className="sugerencia" data-ejemplo onClick={() => enviar(null, e.texto)}>
+                          <span className="sugerencia-icono"><Icono /></span>
+                          <span className="sugerencia-texto"><strong>{e.etiqueta}</strong><small>{e.texto}</small></span>
+                          <IconoFlecha />
+                        </button>
+                      )
+                    })}
+                  </li>
                 )}
                 {cargando && (
                   <li className="fila-bot">
@@ -349,16 +436,6 @@ export default function App() {
                 )}
               </ol>
 
-              {mensajes.length === 0 && !cargando && (
-                <div className="ejemplos" role="group" aria-label="Ejemplos">
-                  <span>Prueba con:</span>
-                  {EJEMPLOS.map((e) => (
-                    <button key={e.etiqueta} type="button" className="chip" title={e.texto} onClick={() => { setBorrador(e.texto); textareaRef.current?.focus() }}>
-                      {e.etiqueta}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               <form className="entrada" onSubmit={enviar}>
                 <label className="sr" htmlFor="mensaje">Describe tu proyecto</label>
@@ -386,7 +463,8 @@ export default function App() {
             </div>
 
             {/* ---------- Propuesta ---------- */}
-            <section className="card propuesta" aria-labelledby="t-prop">
+            <section className={cargando && hayPropuesta ? 'card propuesta actualizando' : 'card propuesta'} aria-labelledby="t-prop" aria-busy={cargando}>
+              {cargando && hayPropuesta && <div className="barra-carga">Actualizando propuesta…</div>}
               <div className="bloque">
                 <h3 id="t-prop">Datos del presupuesto</h3>
                 <label className="etiqueta" htmlFor="cliente">Cliente o empresa</label>
@@ -402,21 +480,40 @@ export default function App() {
               {!hayPropuesta ? (
                 <div className="bloque">
                   <p className="etiqueta">Lo que ofrecemos</p>
-                  <ul className="catalogo">
-                    {catalogo.map((s) => (
-                      <li key={s.id}>
-                        <div><strong>{s.nombre}</strong><small>{s.descripcion}</small></div>
-                        <span className="precio">{precioTexto(s)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="hint centrado">Cuéntale tu proyecto al asistente y aquí aparecerá tu propuesta.</p>
+                  {cargando ? (
+                    <div className="esqueleto" aria-label="Preparando tu propuesta">
+                      <i /><i /><i /><i />
+                      <p className="hint centrado">Preparando tu propuesta…</p>
+                    </div>
+                  ) : (
+                    <ul className="catalogo">
+                      {catalogo.map((s) => {
+                        const Icono = ICONO_SERVICIO[s.id] || IconoLista
+                        return (
+                          <li key={s.id}>
+                            <span className="servicio-icono"><Icono /></span>
+                            <span className="precio">{precioTexto(s)}</span>
+                            <strong>{s.nombre}</strong>
+                            <small>{s.descripcion}</small>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                  {!cargando && (
+                    <>
+                      <p className="hint centrado">Cuéntale tu proyecto al asistente y aquí aparecerá tu propuesta.</p>
+                      <button type="button" className="btn btn-fantasma ancho manual" onClick={() => setHayPropuesta(true)}>
+                        <IconoLista /> Prefiero elegir los servicios yo
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
                   <div className="bloque">
                     <label className="etiqueta" htmlFor="resumen">Resumen del proyecto</label>
-                    <textarea id="resumen" rows={3} value={resumen} maxLength={1500} onChange={(e) => setResumen(e.target.value)} />
+                    <textarea id="resumen" rows={3} value={resumen} maxLength={1500} placeholder="Describe brevemente el proyecto (aparecerá en el PDF)…" onChange={(e) => setResumen(e.target.value)} />
                   </div>
 
                   <div className="bloque">
@@ -428,11 +525,12 @@ export default function App() {
                         if (!def) return null
                         const falta = s.incluido && faltan.includes(def)
                         return (
-                          <li key={s.id} className={`servicio${s.incluido ? '' : ' descartado'}${falta ? ' incompleto' : ''}`}>
+                          <li key={s.id} style={{ '--i': seleccion.indexOf(s) }} className={`servicio${s.incluido ? '' : ' descartado'}${falta ? ' incompleto' : ''}`}>
                             <div className="servicio-cab">
                               <label className="switch">
                                 <input type="checkbox" checked={s.incluido} onChange={(e) => cambiarServicio(s.id, { incluido: e.target.checked })} />
                                 <i aria-hidden="true" />
+                                <span className="servicio-icono peq">{(() => { const Icono = ICONO_SERVICIO[def.id] || IconoLista; return <Icono /> })()}</span>
                                 <strong>{def.nombre}</strong>
                               </label>
                               <span className={s.origen === 'ia' ? 'etiq ia' : 'etiq manual'}>{s.origen === 'ia' ? 'Sugerido' : 'Añadido'}</span>
@@ -537,11 +635,11 @@ export default function App() {
                     )}
 
                     {cotizacion && (
-                      <div className={obsoleto ? 'resultado obsoleto' : 'resultado'}>
+                      <div className={obsoleto ? 'resultado obsoleto' : 'resultado'} ref={resultadoRef}>
                         <div className="resultado-cab">
                           <small>Presupuesto para</small>
                           <strong>{cotizacion.cliente}</strong>
-                          <small>{cotizacion.fecha}</small>
+                          <small>{cotizacion.fecha} · Ref. {cotizacion.referencia}</small>
                         </div>
                         {obsoleto && <span className="aviso">Has cambiado datos: recalcula</span>}
                         <dl>
@@ -554,7 +652,7 @@ export default function App() {
                         </dl>
                         <div className="total">
                           <span>Total <small>IVA no incluido</small></span>
-                          <strong>{eur(cotizacion.total)}</strong>
+                          <strong aria-label={eur(cotizacion.total)}>{eur(totalAnimado)}</strong>
                         </div>
                         <button className="btn btn-verde ancho" type="button" disabled={obsoleto} onClick={() => dialogoRef.current?.showModal()}>
                           <IconoDoc /> Revisar y descargar PDF
@@ -569,13 +667,22 @@ export default function App() {
         </section>
 
         <section className="seccion alt" id="como" aria-labelledby="t-como">
-          <h2 id="t-como">Cómo funciona</h2>
-          <p className="sub">Tú pones la idea; nosotros la convertimos en un presupuesto claro.</p>
+          <h2 id="t-como" className="revelar">Cómo funciona</h2>
+          <p className="sub revelar">Tú pones la idea; nosotros la convertimos en un presupuesto claro.</p>
           <ol className="pasos">
-            <li><span className="icono"><IconoChat /></span><h3>Cuéntanos</h3><p>Explica tu proyecto en el chat. El asistente lo relaciona con los servicios de nuestro catálogo.</p></li>
-            <li><span className="icono"><IconoLista /></span><h3>Revisa</h3><p>Acepta, quita o añade servicios, completa los datos que falten y resuelve las dudas.</p></li>
-            <li><span className="icono"><IconoDoc /></span><h3>Descarga</h3><p>El servidor calcula los importes con las tarifas vigentes y generas el PDF.</p></li>
+            <li className="revelar"><span className="icono"><IconoChat /></span><h3>Cuéntanos</h3><p>Explica tu proyecto en el chat. El asistente lo relaciona con los servicios de nuestro catálogo.</p></li>
+            <li className="revelar" style={{ '--retardo': '.1s' }}><span className="icono"><IconoLista /></span><h3>Revisa</h3><p>Acepta, quita o añade servicios, completa los datos que falten y resuelve las dudas.</p></li>
+            <li className="revelar" style={{ '--retardo': '.2s' }}><span className="icono"><IconoDoc /></span><h3>Descarga</h3><p>El servidor calcula los importes con las tarifas vigentes y generas el PDF.</p></li>
           </ol>
+        </section>
+
+        <section className="cta revelar" aria-labelledby="t-cta">
+          <img src={mascotaCara} alt="" width="72" height="72" />
+          <div>
+            <h2 id="t-cta">¿Tienes una idea en mente?</h2>
+            <p>Cuéntasela al asistente y en un minuto tendrás tu presupuesto.</p>
+          </div>
+          <a className="btn btn-primario" href="#asistente">Empezar ahora <IconoFlecha /></a>
         </section>
       </main>
 
@@ -590,37 +697,53 @@ export default function App() {
             <div className="dialogo-cuerpo">
               <article className="papel">
                 <header className="papel-cab">
-                  <strong>Presupuesta mi web</strong>
-                  <span>Presupuesto de desarrollo web</span>
-                </header>
-                <p><b>Cliente:</b> {cotizacion.cliente}<br /><b>Fecha:</b> {cotizacion.fecha}</p>
-                <h3>Resumen del proyecto</h3>
-                <p>{cotizacion.resumen || 'Sin resumen.'}</p>
-                <h3>Servicios incluidos</h3>
-                {cotizacion.lineas.map((l) => (
-                  <div key={l.id} className="papel-servicio">
-                    <b>{l.nombre}{l.cantidad > 1 ? ` (x${l.cantidad})` : ''}</b>
-                    <p>{l.descripcion}</p>
-                    {l.justificacion && <p><i>Motivo: {l.justificacion}</i></p>}
+                  <img src={mascotaCara} alt="" width="52" height="52" />
+                  <div>
+                    <strong>Presupuesta mi web</strong>
+                    <span>Diseño y desarrollo de páginas web</span>
                   </div>
-                ))}
-                <h3>Desglose de importes</h3>
-                <table>
-                  <tbody>
-                    {cotizacion.lineas.map((l) => (
-                      <tr key={l.id}>
-                        <td>{l.nombre}{l.cantidad > 1 ? `: ${l.cantidad} × ${eur(l.precioUnitario)}` : ''}</td>
-                        <td>{eur(l.importe)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot><tr><th>TOTAL</th><th>{eur(cotizacion.total)}</th></tr></tfoot>
-                </table>
-                <p className="papel-nota">IVA no incluido. Importes calculados con las tarifas vigentes.</p>
-                <h3>Aclaraciones y aspectos pendientes</h3>
-                {cotizacion.aclaraciones.length ? (
-                  <ul>{cotizacion.aclaraciones.map((a, i) => <li key={i}>{a}</li>)}</ul>
-                ) : <p>No hay aspectos pendientes.</p>}
+                  <div className="papel-ref">
+                    <strong>PRESUPUESTO</strong>
+                    <span>Ref. {cotizacion.referencia}</span>
+                    <span>{cotizacion.fecha}</span>
+                  </div>
+                </header>
+                <div className="papel-cuerpo">
+                  <div className="papel-cliente">
+                    <small>PREPARADO PARA</small>
+                    <strong>{cotizacion.cliente}</strong>
+                  </div>
+                  <h3>Resumen del proyecto</h3>
+                  <p>{cotizacion.resumen || 'Sin resumen.'}</p>
+                  <h3>Servicios incluidos</h3>
+                  <div className="papel-tabla">
+                    <table>
+                      <thead><tr><th>Concepto</th><th>Cant.</th><th>Precio</th><th>Importe</th></tr></thead>
+                      <tbody>
+                        {cotizacion.lineas.map((l) => (
+                          <tr key={l.id}>
+                            <td>
+                              <b>{l.nombre}</b>
+                              <span>{l.descripcion}</span>
+                              {l.justificacion && <i>Motivo: {l.justificacion}</i>}
+                            </td>
+                            <td>{l.cantidad}</td>
+                            <td>{eur(l.precioUnitario)}</td>
+                            <td><b>{eur(l.importe)}</b></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="papel-total">
+                    <small>Importes calculados con las tarifas vigentes.<br />IVA no incluido.</small>
+                    <div><span>TOTAL</span><strong>{eur(cotizacion.total)}</strong></div>
+                  </div>
+                  <h3>Aclaraciones y aspectos pendientes</h3>
+                  {cotizacion.aclaraciones.length ? (
+                    <ul className="papel-aclaraciones">{cotizacion.aclaraciones.map((a, i) => <li key={i}>{a}</li>)}</ul>
+                  ) : <p>No hay aspectos pendientes.</p>}
+                </div>
               </article>
             </div>
             <div className="dialogo-acciones">
@@ -632,6 +755,25 @@ export default function App() {
           </>
         )}
       </dialog>
+
+      {cotizacion && !obsoleto && !resultadoVisible && (
+        <div className="barra-movil" role="region" aria-label="Resumen del presupuesto">
+          <div><small>Total · IVA no incl.</small><strong>{eur(cotizacion.total)}</strong></div>
+          <button type="button" className="btn btn-verde" onClick={() => dialogoRef.current?.showModal()}>
+            <IconoDoc /> Ver PDF
+          </button>
+        </div>
+      )}
+
+      <a href="#inicio" className={scrollado ? 'arriba visible' : 'arriba'} aria-label="Volver arriba" tabIndex={scrollado ? 0 : -1}>
+        <IconoFlecha />
+      </a>
+
+      {toast && (
+        <div className="toast" role="status">
+          <span><IconoCheck /></span>{toast}
+        </div>
+      )}
 
       <footer className="pie">
         <a className="logo" href="#inicio">
@@ -656,4 +798,44 @@ const IconoAlerta = () => <svg {...svg}><circle cx="12" cy="12" r="10" /><path d
 const IconoDoc = () => <svg {...svg}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg>
 const IconoDescarga = () => <svg {...svg}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
 const IconoChat = () => <svg {...svg}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+const IconoPagina = () => <svg {...svg}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M8 14h8" /></svg>
+const IconoEdificio = () => <svg {...svg}><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M9 22v-4h6v4" /><path d="M8 6h.01M12 6h.01M16 6h.01M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14h.01" /></svg>
+const IconoCapas = () => <svg {...svg}><path d="m12 2 10 5-10 5L2 7z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></svg>
+const IconoFormulario = () => <svg {...svg}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9h10" /><path d="M7 13h6" /><path d="M14 17h3" /></svg>
+const IconoGlobo = () => <svg {...svg}><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z" /></svg>
+const IconoCubiertos = () => <svg {...svg}><path d="M7 2v20" /><path d="M4 2v6a3 3 0 0 0 6 0V2" /><path d="M17 22V2c-2 1-3 4-3 7s1 4 3 4" /></svg>
+const IconoTienda = () => <svg {...svg}><path d="M6 2 3 7v13a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-3-5z" /><path d="M3 7h18" /><path d="M16 11a4 4 0 0 1-8 0" /></svg>
+const IconoSol = () => <svg {...svg}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+const IconoLuna = () => <svg {...svg}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
 const IconoLista = () => <svg {...svg}><path d="M9 6h11" /><path d="M9 12h11" /><path d="M9 18h11" /><path d="m3 6 1 1 2-2" /><path d="m3 12 1 1 2-2" /><path d="m3 18 1 1 2-2" /></svg>
+
+const ICONO_SERVICIO = {
+  landing: IconoPagina,
+  corporativa: IconoEdificio,
+  'paginas-adicionales': IconoCapas,
+  formulario: IconoFormulario,
+  'segundo-idioma': IconoGlobo
+}
+const ICONO_EJEMPLO = { restaurante: IconoCubiertos, sencillo: IconoChispa, tienda: IconoTienda }
+
+// Anima un número desde su valor anterior hasta el nuevo (respeta "reducir movimiento")
+function useContador(objetivo, duracion = 700) {
+  const [valor, setValor] = useState(objetivo)
+  const anterior = useRef(objetivo)
+  useEffect(() => {
+    const desde = anterior.current
+    anterior.current = objetivo
+    if (desde === objetivo || matchMedia('(prefers-reduced-motion: reduce)').matches) { setValor(objetivo); return }
+    let id
+    const inicio = performance.now()
+    const paso = (t) => {
+      const p = Math.min(1, (t - inicio) / duracion)
+      const suave = 1 - Math.pow(1 - p, 3)
+      setValor(Math.round((desde + (objetivo - desde) * suave) * 100) / 100)
+      if (p < 1) id = requestAnimationFrame(paso)
+    }
+    id = requestAnimationFrame(paso)
+    return () => cancelAnimationFrame(id)
+  }, [objetivo, duracion])
+  return valor
+}
